@@ -33,6 +33,7 @@ export enum GOOGLE_ADS_ENTITY_STATUS {
 
 export enum GOOGLE_ADS_ACTION {
   TOGGLE = 'Enable/Pause',
+  MANAGE_CONV_VALUE_RULE = 'Manage Conv. Value Rule',
 }
 
 interface Parameters {
@@ -40,6 +41,8 @@ interface Parameters {
   developerToken: string;
   loginCustomerId?: string;
   serviceAccount?: ServiceAccount;
+  geo?: string;
+  conversionWeight?: number;
 }
 
 interface Entity {
@@ -89,6 +92,8 @@ export class GoogleAds extends TargetAgent {
 
     if (action === GOOGLE_ADS_ACTION.TOGGLE) {
       return this.handleToggle(identifier, type, evaluation, params);
+    } else if (action === GOOGLE_ADS_ACTION.MANAGE_CONV_VALUE_RULE) {
+      this.handleAddingConversionRule(identifier, evaluation, params);
     } else {
       throw new Error(
         `Action '${action}' not supported in '${GoogleAds.friendlyName}' agent`
@@ -145,6 +150,22 @@ export class GoogleAds extends TargetAgent {
     } else if (type === GOOGLE_ADS_SELECTOR_TYPE.CAMPAIGN_LABEL) {
       this.updateCampaignsByLabel(params.customerId, identifier, status);
     }
+  }
+
+  handleAddingConversionRule(
+    identifier: string,
+    evaluation: boolean,
+    params: Parameters
+  ) {
+    if (params.conversionWeight === undefined) {
+      throw new Error('A conversion weight target value was not provided.');
+    }
+
+    const weight: number = evaluation
+      ? params.conversionWeight
+      : params.conversionWeight * -1;
+
+    console.log(`Conversion weight to apply:  ${weight}`);
   }
 
   /**
