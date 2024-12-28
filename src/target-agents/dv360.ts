@@ -67,14 +67,14 @@ export class DV360 extends TargetAgent {
    * @param {string} identifier
    * @param {DV360_ENTITY_TYPE} type
    * @param {DV360_ACTION} action
-   * @param {boolean} evaluation
+   * @param {boolean | number} evaluation
    * @param {Parameters} params Additional parameters
    */
   process(
     identifier: string,
     type: DV360_ENTITY_TYPE,
     action: DV360_ACTION,
-    evaluation: boolean,
+    evaluation: boolean | number,
     params: Parameters
   ) {
     // Check for missing parameters
@@ -84,7 +84,7 @@ export class DV360 extends TargetAgent {
     this.authToken = auth.getAuthToken();
 
     if (action === DV360_ACTION.TOGGLE) {
-      return this.handleToggle(identifier, type, evaluation, params);
+      return this.handleToggle(identifier, type, evaluation as boolean, params);
     } else {
       throw new Error(
         `Action '${action}' not supported in '${DV360.friendlyName}' agent`
@@ -119,7 +119,7 @@ export class DV360 extends TargetAgent {
    * @param {string} identifier
    * @param {DV360_ENTITY_TYPE} type
    * * @param {DV360_ACTION} action
-   * @param {boolean} evaluation
+   * @param {boolean | number} evaluation
    * @param {Parameters} params Additional parameters
    * @returns {string[]}
    */
@@ -127,7 +127,7 @@ export class DV360 extends TargetAgent {
     identifier: string,
     type: DV360_ENTITY_TYPE,
     action: DV360_ACTION,
-    evaluation: boolean,
+    evaluation: boolean | number,
     params: Parameters
   ) {
     // Check for missing parameters
@@ -145,7 +145,7 @@ export class DV360 extends TargetAgent {
       status = this.isInsertionOrderActive(params.advertiserId, identifier);
     }
 
-    if (evaluation !== status) {
+    if ((evaluation as boolean) !== status) {
       errors.push(
         `Status for ${identifier} (${type}) should be ${evaluation} but is ${status}`
       );

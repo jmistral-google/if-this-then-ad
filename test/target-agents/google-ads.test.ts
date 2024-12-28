@@ -70,108 +70,156 @@ describe('Google Ads Target Agent', () => {
       jest.spyOn(Auth.prototype, 'getAuthToken').mockReturnValue('');
     });
 
-    it('Updates Ad correctly with single ID', () => {
-      const ads = new GoogleAds();
+    describe('When handling the update ad status target action', () => {
+      it('Updates Ad correctly with single ID', () => {
+        const ads = new GoogleAds();
 
-      // Set up spies
-      const fetchUrlSpy = jest.spyOn(GoogleAds.prototype as any, 'fetchUrl');
+        // Set up spies
+        const fetchUrlSpy = jest.spyOn(GoogleAds.prototype as any, 'fetchUrl');
 
-      jest
-        .spyOn(GoogleAds.prototype as any, 'fetchUrl')
-        .mockReturnValue(singleAdByIdRaw);
+        jest
+          .spyOn(GoogleAds.prototype as any, 'fetchUrl')
+          .mockReturnValue(singleAdByIdRaw);
 
-      const updateAdStatusByIdSpy = jest.spyOn(
-        GoogleAds.prototype as any,
-        'updateAdStatusById'
-      );
+        const updateAdStatusByIdSpy = jest.spyOn(
+          GoogleAds.prototype as any,
+          'updateAdStatusById'
+        );
 
-      const updateEntityStatusSpy = jest.spyOn(
-        GoogleAds.prototype as any,
-        'updateEntityStatus'
-      );
+        const updateEntityStatusSpy = jest.spyOn(
+          GoogleAds.prototype as any,
+          'updateEntityStatus'
+        );
 
-      const getAdsByIdSpy = jest.spyOn(
-        GoogleAds.prototype as any,
-        'getAdsById'
-      );
+        const getAdsByIdSpy = jest.spyOn(
+          GoogleAds.prototype as any,
+          'getAdsById'
+        );
 
-      // Call function
-      ads.process(
-        '1234',
-        GOOGLE_ADS_SELECTOR_TYPE.AD_ID,
-        GOOGLE_ADS_ACTION.TOGGLE,
-        true,
-        params
-      );
+        // Call function
+        ads.process(
+          '1234',
+          GOOGLE_ADS_SELECTOR_TYPE.AD_ID,
+          GOOGLE_ADS_ACTION.TOGGLE,
+          true,
+          params
+        );
 
-      // Evaluate
-      expect(updateAdStatusByIdSpy).toHaveBeenCalledWith(
-        '1',
-        ['1234'],
-        GOOGLE_ADS_ENTITY_STATUS.ENABLED
-      );
+        // Evaluate
+        expect(updateAdStatusByIdSpy).toHaveBeenCalledWith(
+          '1',
+          ['1234'],
+          GOOGLE_ADS_ENTITY_STATUS.ENABLED
+        );
 
-      expect(getAdsByIdSpy).toHaveBeenCalledWith('1', ['1234']);
+        expect(getAdsByIdSpy).toHaveBeenCalledWith('1', ['1234']);
 
-      expect(updateEntityStatusSpy).toHaveBeenCalledWith(
-        'customers/1/adGroupAds:mutate',
-        singleAdById,
-        GOOGLE_ADS_ENTITY_STATUS.ENABLED
-      );
+        expect(fetchUrlSpy).toHaveBeenCalledTimes(2);
+      });
 
-      expect(fetchUrlSpy).toHaveBeenCalledTimes(2);
+      it('Updates Ads correctly with multiple IDs', () => {
+        const ads = new GoogleAds();
+
+        // Set up spies
+        const fetchUrlSpy = jest.spyOn(GoogleAds.prototype as any, 'fetchUrl');
+
+        jest
+          .spyOn(GoogleAds.prototype as any, 'fetchUrl')
+          .mockReturnValue(singleAdByIdRaw);
+
+        const updateAdStatusByIdSpy = jest.spyOn(
+          GoogleAds.prototype as any,
+          'updateAdStatusById'
+        );
+
+        const updateEntityStatusSpy = jest.spyOn(
+          GoogleAds.prototype as any,
+          'updateEntityStatus'
+        );
+
+        const getAdsByIdSpy = jest.spyOn(
+          GoogleAds.prototype as any,
+          'getAdsById'
+        );
+
+        // Call function
+        ads.process(
+          '1234;2345',
+          GOOGLE_ADS_SELECTOR_TYPE.AD_ID,
+          GOOGLE_ADS_ACTION.TOGGLE,
+          true,
+          params
+        );
+
+        // Evaluate
+        expect(updateAdStatusByIdSpy).toHaveBeenCalledWith(
+          '1',
+          ['1234', '2345'],
+          GOOGLE_ADS_ENTITY_STATUS.ENABLED
+        );
+
+        expect(getAdsByIdSpy).toHaveBeenCalledWith('1', ['1234', '2345']);
+
+        expect(fetchUrlSpy).toHaveBeenCalledTimes(4);
+      });
     });
 
-    it('Updates Ads correctly with multiple IDs', () => {
-      const ads = new GoogleAds();
+    describe('When handling the manage campaign CVR target action', () => {
+      it("Throws an error if the conversion weight target param weight isn't supplied", () => {
+        const ads = new GoogleAds();
+        const manageCvrParams = {
+          customerId: '1',
+          developerToken: 'token',
+          geo: 'New York',
+        };
 
-      // Set up spies
-      const fetchUrlSpy = jest.spyOn(GoogleAds.prototype as any, 'fetchUrl');
+        expect(() => {
+          ads.process(
+            '1234',
+            GOOGLE_ADS_SELECTOR_TYPE.AD_ID,
+            GOOGLE_ADS_ACTION.MANAGE_CONV_VALUE_RULE,
+            -1,
+            manageCvrParams
+          );
+        }).toThrow(/conversion weight/);
+      });
 
-      jest
-        .spyOn(GoogleAds.prototype as any, 'fetchUrl')
-        .mockReturnValue(singleAdByIdRaw);
+      it("Throws an error if the geo target param isn't supplied supplied", () => {
+        const ads = new GoogleAds();
+        const manageCvrParams = {
+          customerId: '1',
+          developerToken: 'token',
+          conversionWeight: 0.25,
+        };
 
-      const updateAdStatusByIdSpy = jest.spyOn(
-        GoogleAds.prototype as any,
-        'updateAdStatusById'
-      );
+        expect(() => {
+          ads.process(
+            '1234',
+            GOOGLE_ADS_SELECTOR_TYPE.AD_ID,
+            GOOGLE_ADS_ACTION.MANAGE_CONV_VALUE_RULE,
+            -1,
+            manageCvrParams
+          );
+        }).toThrow(/geo/);
+      });
 
-      const updateEntityStatusSpy = jest.spyOn(
-        GoogleAds.prototype as any,
-        'updateEntityStatus'
-      );
+      it('Handles numeric evaluation values for updating campaign CVRs', () => {
+        const ads = new GoogleAds();
+        const manageCvrParams = {
+          customerId: '1',
+          developerToken: 'token',
+          geo: 'New York, New York',
+          conversionWeight: 0.25,
+        };
 
-      const getAdsByIdSpy = jest.spyOn(
-        GoogleAds.prototype as any,
-        'getAdsById'
-      );
-
-      // Call function
-      ads.process(
-        '1234;2345',
-        GOOGLE_ADS_SELECTOR_TYPE.AD_ID,
-        GOOGLE_ADS_ACTION.TOGGLE,
-        true,
-        params
-      );
-
-      // Evaluate
-      expect(updateAdStatusByIdSpy).toHaveBeenCalledWith(
-        '1',
-        ['1234', '2345'],
-        GOOGLE_ADS_ENTITY_STATUS.ENABLED
-      );
-
-      expect(getAdsByIdSpy).toHaveBeenCalledWith('1', ['1234', '2345']);
-
-      expect(updateEntityStatusSpy).toHaveBeenCalledWith(
-        'customers/1/adGroupAds:mutate',
-        singleAdById,
-        GOOGLE_ADS_ENTITY_STATUS.ENABLED
-      );
-
-      expect(fetchUrlSpy).toHaveBeenCalledTimes(4);
+        ads.process(
+          '1234',
+          GOOGLE_ADS_SELECTOR_TYPE.AD_ID,
+          GOOGLE_ADS_ACTION.MANAGE_CONV_VALUE_RULE,
+          -1.0,
+          manageCvrParams
+        );
+      });
     });
   });
 

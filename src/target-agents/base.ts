@@ -29,18 +29,20 @@ export class TargetAgent extends ApiHelper {
     identifier: string,
     type: string,
     action: string,
-    evaluation: boolean,
+    evaluation: boolean | number,
     params: Object
-  ) {}
+  ) {
+    throw new Error('process() method not implemented.');
+  }
 
   validate(
     identifier: string,
     type: string,
     action: string,
-    evaluation: boolean,
+    evaluation: boolean | number,
     params: Object
   ): string[] {
-    throw new Error('Method not implemented.');
+    throw new Error('validate() method not implemented.');
   }
 
   /**

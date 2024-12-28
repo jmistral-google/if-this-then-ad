@@ -72,14 +72,14 @@ export class GoogleAds extends TargetAgent {
    * @param {string} identifier
    * @param {GOOGLE_ADS_SELECTOR_TYPE} type
    * @param {GOOGLE_ADS_ACTION} action
-   * @param {boolean} evaluation
+   * @param {boolean | number} evaluation
    * @param {Parameters} params Additional parameters
    */
   process(
     identifier: string,
     type: GOOGLE_ADS_SELECTOR_TYPE,
     action: GOOGLE_ADS_ACTION,
-    evaluation: boolean,
+    evaluation: boolean | number,
     params: Parameters
   ) {
     // Check for missing parameters
@@ -91,9 +91,9 @@ export class GoogleAds extends TargetAgent {
     this.parameters = params;
 
     if (action === GOOGLE_ADS_ACTION.TOGGLE) {
-      return this.handleToggle(identifier, type, evaluation, params);
+      return this.handleToggle(identifier, type, evaluation as boolean, params);
     } else if (action === GOOGLE_ADS_ACTION.MANAGE_CONV_VALUE_RULE) {
-      this.handleAddingConversionRule(identifier, evaluation, params);
+      this.handleAddingConversionRule(identifier, evaluation as number, params);
     } else {
       throw new Error(
         `Action '${action}' not supported in '${GoogleAds.friendlyName}' agent`
@@ -154,16 +154,20 @@ export class GoogleAds extends TargetAgent {
 
   handleAddingConversionRule(
     identifier: string,
-    evaluation: boolean,
+    evaluation: number,
     params: Parameters
   ) {
     if (params.conversionWeight === undefined) {
-      throw new Error('A conversion weight target value was not provided.');
+      throw new Error('The conversion weight target param was not provided.');
+    }
+
+    if (params.geo === undefined) {
+      throw new Error('The geo target param value was not provided.');
     }
 
     const weight: number = evaluation
-      ? params.conversionWeight
-      : params.conversionWeight * -1;
+      ? 1 + params.conversionWeight
+      : 1 + params.conversionWeight * -1;
 
     console.log(`Conversion weight to apply:  ${weight}`);
   }
