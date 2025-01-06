@@ -72,14 +72,14 @@ export class GoogleAds extends TargetAgent {
    * @param {string} identifier
    * @param {GOOGLE_ADS_SELECTOR_TYPE} type
    * @param {GOOGLE_ADS_ACTION} action
-   * @param {boolean | number} evaluation
+   * @param {boolean} evaluation
    * @param {Parameters} params Additional parameters
    */
   process(
     identifier: string,
     type: GOOGLE_ADS_SELECTOR_TYPE,
     action: GOOGLE_ADS_ACTION,
-    evaluation: boolean | number,
+    evaluation: boolean,
     params: Parameters
   ) {
     // Check for missing parameters
@@ -91,9 +91,9 @@ export class GoogleAds extends TargetAgent {
     this.parameters = params;
 
     if (action === GOOGLE_ADS_ACTION.TOGGLE) {
-      return this.handleToggle(identifier, type, evaluation as boolean, params);
+      return this.handleToggle(identifier, type, evaluation, params);
     } else if (action === GOOGLE_ADS_ACTION.MANAGE_CONV_VALUE_RULE) {
-      this.handleAddingConversionRule(identifier, evaluation as number, params);
+      this.handleAddingConversionRule(identifier, evaluation, params);
     } else {
       throw new Error(
         `Action '${action}' not supported in '${GoogleAds.friendlyName}' agent`
@@ -154,7 +154,7 @@ export class GoogleAds extends TargetAgent {
 
   handleAddingConversionRule(
     identifier: string,
-    evaluation: number,
+    evaluation: boolean,
     params: Parameters
   ) {
     if (params.conversionWeight === undefined) {

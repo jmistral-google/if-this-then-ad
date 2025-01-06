@@ -178,7 +178,7 @@ describe('Google Ads Target Agent', () => {
             '1234',
             GOOGLE_ADS_SELECTOR_TYPE.AD_ID,
             GOOGLE_ADS_ACTION.MANAGE_CONV_VALUE_RULE,
-            -1,
+            true,
             manageCvrParams
           );
         }).toThrow(/conversion weight/);
@@ -197,28 +197,10 @@ describe('Google Ads Target Agent', () => {
             '1234',
             GOOGLE_ADS_SELECTOR_TYPE.AD_ID,
             GOOGLE_ADS_ACTION.MANAGE_CONV_VALUE_RULE,
-            -1,
+            true,
             manageCvrParams
           );
         }).toThrow(/geo/);
-      });
-
-      it('Handles numeric evaluation values for updating campaign CVRs', () => {
-        const ads = new GoogleAds();
-        const manageCvrParams = {
-          customerId: '1',
-          developerToken: 'token',
-          geo: 'New York, New York',
-          conversionWeight: 0.25,
-        };
-
-        ads.process(
-          '1234',
-          GOOGLE_ADS_SELECTOR_TYPE.AD_ID,
-          GOOGLE_ADS_ACTION.MANAGE_CONV_VALUE_RULE,
-          -1.0,
-          manageCvrParams
-        );
       });
     });
   });
