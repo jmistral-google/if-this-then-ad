@@ -165,7 +165,9 @@ export class GoogleAds extends TargetAgent {
       throw new Error('The geo target param value was not provided.');
     }
 
-    console.log(`Conversion weight to apply to CVR:  ${evaluation}`);
+    console.log(
+      `Will create/update CVR?:  ${evaluation}, conv. weight ${params.conversionWeight}`
+    );
   }
 
   /**
