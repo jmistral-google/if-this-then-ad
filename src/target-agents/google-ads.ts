@@ -16,6 +16,7 @@
 
 import { Auth, ServiceAccount } from '../helpers/auth';
 import { TargetAgent } from './base';
+import { CampaignDao, EmptyCampaignDaoImpl } from '../dao/campaign_cvr';
 
 export enum GOOGLE_ADS_SELECTOR_TYPE {
   AD_ID = 'AD_ID',
@@ -93,7 +94,7 @@ export class GoogleAds extends TargetAgent {
     if (action === GOOGLE_ADS_ACTION.TOGGLE) {
       return this.handleToggle(identifier, type, evaluation, params);
     } else if (action === GOOGLE_ADS_ACTION.MANAGE_CONV_VALUE_RULE) {
-      this.handleAddingConversionRule(identifier, evaluation, params);
+      this.handleManageConversionRule(identifier, type, evaluation, params);
     } else {
       throw new Error(
         `Action '${action}' not supported in '${GoogleAds.friendlyName}' agent`
@@ -152,8 +153,12 @@ export class GoogleAds extends TargetAgent {
     }
   }
 
-  handleAddingConversionRule(
+  /**
+   * Handles delegation of managing campaign CVRs.
+   */
+  private handleManageConversionRule(
     identifier: string,
+    selectoryType: GOOGLE_ADS_SELECTOR_TYPE,
     evaluation: boolean,
     params: Parameters
   ) {
@@ -165,9 +170,35 @@ export class GoogleAds extends TargetAgent {
       throw new Error('The geo target param value was not provided.');
     }
 
+    const campaings: Entity[] =
+      selectoryType === GOOGLE_ADS_SELECTOR_TYPE.CAMPAIGN_ID
+        ? this.getCampaingsById(
+            params.customerId,
+            (identifier as string).split(';').map(id => String(id))
+          )
+        : this.getCampaignsByLabel(params.customerId, identifier);
+    console.log(
+      `Retrieved following campaigns to manage CVRs for:  ${campaings.map(
+        campaign => campaign.resourceName
+      )}`
+    );
+
+    // TODO:  Replace with real impl when completed.
     console.log(
       `Will create/update CVR?:  ${evaluation}, conv. weight ${params.conversionWeight}`
     );
+    const campaignCvrDao = new EmptyCampaignDaoImpl(params.customerId);
+    if (!evaluation) {
+      campaignCvrDao.disableAllCvrsForCampaigns(
+        campaings.map(entity => entity.resourceName)
+      );
+    } else {
+      campaignCvrDao.persistCvrForCampaigns(
+        campaings.map(entity => entity.resourceName),
+        params.conversionWeight,
+        params.geo
+      );
+    }
   }
 
   /**
@@ -345,16 +376,7 @@ export class GoogleAds extends TargetAgent {
     ids: string[],
     status: string
   ) {
-    const query = `
-      SELECT 
-        campaign.id,
-        campaign.status
-      FROM campaign
-      WHERE 
-        campaign.id IN (${ids.join(',')})
-    `;
-
-    const campaigns = this.getEntitiesByQuery(customerId, query, 'campaign');
+    const campaigns = this.getCampaingsById(customerId, ids);
 
     const path = `customers/${customerId}/campaigns:mutate`;
     for (const campaign of campaigns) {
@@ -466,11 +488,11 @@ export class GoogleAds extends TargetAgent {
    */
   private getAdGroupsById(customerId: string, ids: string[]): Entity[] {
     const query = `
-          SELECT 
+          SELECT
             ad_group.id,
             ad_group.status
           FROM ad_group
-          WHERE 
+          WHERE
             ad_group.id IN (${ids.join(',')})
         `;
 
@@ -489,6 +511,19 @@ export class GoogleAds extends TargetAgent {
         status: result.adGroup.status,
       };
     });
+  }
+
+  private getCampaingsById(customerId: string, ids: string[]): Entity[] {
+    const query = `
+      SELECT 
+        campaign.id,
+        campaign.status
+      FROM campaign
+      WHERE 
+        campaign.id IN (${ids.join(',')})
+    `;
+
+    return this.getEntitiesByQuery(customerId, query, 'campaign');
   }
 
   /**
@@ -665,20 +700,14 @@ export class GoogleAds extends TargetAgent {
    * @returns {Entity[]}
    */
   private getCampaignsByLabel(customerId: string, label: string): Entity[] {
-    const labelResource = this.getCampaignLabelResourceByName(
-      customerId,
-      label
-    );
-
     const query = `
-      SELECT 
-        campaign.id,
+      SELECT
+        campaign.resource_name,
         campaign.status
-      FROM campaign 
-      WHERE 
-        campaign.labels CONTAINS ANY ('${labelResource}')
+      FROM campaign_label
+      WHERE
+        label.name = '${label}'
     `;
-
     return this.getEntitiesByQuery(customerId, query, 'campaign');
   }
 
@@ -702,6 +731,11 @@ export class GoogleAds extends TargetAgent {
     `;
 
     const campaignLabels = this.getEntitiesByQuery(customerId, query, 'label');
+    console.log(
+      `Retrieved campaign labels for '${labelName}':  ${campaignLabels.map(
+        entity => entity.resourceName + ' : ' + entity.status
+      )}`
+    );
     return campaignLabels[0].resourceName;
   }
 }
