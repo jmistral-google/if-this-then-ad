@@ -729,34 +729,6 @@ export class GoogleAds extends TargetAgent {
   }
 
   /**
-   * Retrieves the campaign label resource name for the provided label name.
-   *
-   * @param customerId
-   * @param labelName
-   */
-  private getCampaignLabelResourceByName(
-    customerId: string,
-    labelName: string
-  ): string {
-    const query = `
-      SELECT
-        label.resource_name,
-        label.status
-      FROM label
-      WHERE 
-        label.name = '${labelName}'
-    `;
-
-    const campaignLabels = this.getEntitiesByQuery(customerId, query, 'label');
-    console.log(
-      `Retrieved campaign labels for '${labelName}':  ${campaignLabels.map(
-        entity => entity.resourceName + ' : ' + entity.status
-      )}`
-    );
-    return campaignLabels[0].resourceName;
-  }
-
-  /**
    * Retrieves the GeoTargetConstant resource name for a specific location.
    *
    * @param {string} customerId
