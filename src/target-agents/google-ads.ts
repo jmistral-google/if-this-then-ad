@@ -26,6 +26,14 @@ const CVR_ADJUSTMENT_LOWER_BOUND = -0.5;
 // beyond 1000% more than it's original value.
 const CVR_ADJUSTMENT_UPPER_BOUND = 10.0;
 
+// Lower bound of the CVR adjustment.  Ie, a CVR can not lower a conversion
+// beyond 50% less than it's original value.
+const CVR_ADJUSTMENT_LOWER_BOUND = -0.5;
+
+// Upper bound of the CVR adjustment.  Ie, a CVR can not raise a conversion
+// beyond 1000% more than it's original value.
+const CVR_ADJUSTMENT_UPPER_BOUND = 10.0;
+
 export enum GOOGLE_ADS_SELECTOR_TYPE {
   AD_ID = 'AD_ID',
   AD_LABEL = 'AD_LABEL',
@@ -210,8 +218,18 @@ export class GoogleAds extends TargetAgent {
       );
       const finalAdjustment: number = 1 + clampedAdjustment;
 
+      // The DAO will create a multiplication CVR, where conversion values are
+      // multiplied by the generated %.  NOTE:  Ads restricts multiplied
+      // percentages be clamped between an lower and upper bound of 50% to 1000%
+      const clampedAdjustment: number = Math.max(
+        CVR_ADJUSTMENT_LOWER_BOUND,
+        Math.min(params.conversionWeight, CVR_ADJUSTMENT_UPPER_BOUND)
+      );
+      const finalAdjustment: number = 1 + clampedAdjustment;
+
       campaignCvrDao.persistCvrForCampaigns(
         campaings.map(entity => entity.resourceName),
+        finalAdjustment,
         finalAdjustment,
         params.geo
       );
