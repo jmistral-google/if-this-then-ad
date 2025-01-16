@@ -18,6 +18,14 @@ import { Auth, ServiceAccount } from '../helpers/auth';
 import { TargetAgent } from './base';
 import { CampaignDao, EmptyCampaignDaoImpl } from '../dao/campaign_cvr';
 
+// Lower bound of the CVR adjustment.  Ie, a CVR can not lower a conversion
+// beyond 50% less than it's original value.
+const CVR_ADJUSTMENT_LOWER_BOUND = -0.5;
+
+// Upper bound of the CVR adjustment.  Ie, a CVR can not raise a conversion
+// beyond 1000% more than it's original value.
+const CVR_ADJUSTMENT_UPPER_BOUND = 10.0;
+
 export enum GOOGLE_ADS_SELECTOR_TYPE {
   AD_ID = 'AD_ID',
   AD_LABEL = 'AD_LABEL',
@@ -193,9 +201,18 @@ export class GoogleAds extends TargetAgent {
         campaings.map(entity => entity.resourceName)
       );
     } else {
+      // The DAO will create a multiplication CVR, where conversion values are
+      // multiplied by the generated %.  NOTE:  Ads restricts multiplied
+      // percentages be clamped between an lower and upper bound of 50% to 1000%
+      const clampedAdjustment: number = Math.max(
+        CVR_ADJUSTMENT_LOWER_BOUND,
+        Math.min(params.conversionWeight, CVR_ADJUSTMENT_UPPER_BOUND)
+      );
+      const finalAdjustment: number = 1 + clampedAdjustment;
+
       campaignCvrDao.persistCvrForCampaigns(
         campaings.map(entity => entity.resourceName),
-        params.conversionWeight,
+        finalAdjustment,
         params.geo
       );
     }
@@ -709,33 +726,5 @@ export class GoogleAds extends TargetAgent {
         label.name = '${label}'
     `;
     return this.getEntitiesByQuery(customerId, query, 'campaign');
-  }
-
-  /**
-   * Retrieves the campaign label resource name for the provided label name.
-   *
-   * @param customerId
-   * @param labelName
-   */
-  private getCampaignLabelResourceByName(
-    customerId: string,
-    labelName: string
-  ): string {
-    const query = `
-      SELECT
-        label.resource_name,
-        label.status
-      FROM label
-      WHERE 
-        label.name = '${labelName}'
-    `;
-
-    const campaignLabels = this.getEntitiesByQuery(customerId, query, 'label');
-    console.log(
-      `Retrieved campaign labels for '${labelName}':  ${campaignLabels.map(
-        entity => entity.resourceName + ' : ' + entity.status
-      )}`
-    );
-    return campaignLabels[0].resourceName;
   }
 }
