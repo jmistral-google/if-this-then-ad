@@ -704,4 +704,29 @@ export class GoogleAds extends TargetAgent {
     const campaignLabels = this.getEntitiesByQuery(customerId, query, 'label');
     return campaignLabels[0].resourceName;
   }
+
+  /**
+   * Retrieves the GeoTargetConstant resource name for a specific location.
+   *
+   * @param {string} customerId
+   * @param {string} locationName
+   * @returns {string}
+   */
+  private getGeoTargetByName(customerId: string, locationName: string): string {
+    const query = `
+      SELECT
+        geo_target_constant.resource_name,
+        geo_target_constant.name,
+        geo_target_constant.country_code,
+        geo_target_constant.target_type
+      FROM
+        geo_target_constant
+      WHERE
+        geo_target_constant.target_type = 'City'
+        AND geo_target_constant.name = '${locationName}'
+    `;
+
+    const geoTargets = this.getEntitiesByQuery(customerId, query, 'geo_target_constant');
+    return geoTargets[0].resourceName;
+  }
 }
