@@ -729,4 +729,41 @@ export class GoogleAds extends TargetAgent {
     const geoTargets = this.getEntitiesByQuery(customerId, query, 'geo_target_constant');
     return geoTargets[0].resourceName;
   }
+
+
+  /**
+   * Creates a ConversionValueRule that applies to the specified location.
+   *
+   * @param {string} customerId - The customer ID.
+   * @param {string} geoTargetName - The name of the geo target (e.g., a city).
+   * @param {number} value - The adjustment factor (e.g., 1.2 for a 20% increase).
+   * @returns {string} - The resource name of the created ConversionValueRule.
+   */
+  private createConversionValueRuleForLocation(customerId: string, geoTargetName: string, value: number): string {
+    // Retrieve the GeoTargetConstant resource name for the provided geo target name.
+    const geoTargetResource = this.getGeoTargetByName(customerId, geoTargetName);
+
+    // Construct the ConversionValueRule operation payload.
+    const payload = {
+      operations: [
+        {
+          create: {
+            action: {
+              operation: 'MULTIPLY', // Define the action type (e.g., MULTIPLY or ADD).
+              value: value, // Use the provided adjustment factor.
+            },
+            geoLocationCondition: {
+              geoTargetConstants: [geoTargetResource],
+              geoMatchType: 'LOCATION_OF_PRESENCE', // Match based on location presence.
+            },
+          },
+        },
+      ],
+    };
+
+    const path = `customers/${customerId}/conversionValueRules:mutate`;
+    const res = this.fetchUrl(path, 'POST', payload);
+    const parsedResponse = JSON.parse(res.getContentText());
+    return parsedResponse.results[0]?.resourceName;
+  }
 }
