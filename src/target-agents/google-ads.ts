@@ -16,6 +16,15 @@
 
 import { Auth, ServiceAccount } from '../helpers/auth';
 import { TargetAgent } from './base';
+import { CampaignDao, EmptyCampaignDaoImpl } from '../dao/campaign_cvr';
+
+// Lower bound of the CVR adjustment.  Ie, a CVR can not lower a conversion
+// beyond 50% less than it's original value.
+const CVR_ADJUSTMENT_LOWER_BOUND = -0.5;
+
+// Upper bound of the CVR adjustment.  Ie, a CVR can not raise a conversion
+// beyond 1000% more than it's original value.
+const CVR_ADJUSTMENT_UPPER_BOUND = 10.0;
 
 export enum GOOGLE_ADS_SELECTOR_TYPE {
   AD_ID = 'AD_ID',
@@ -93,7 +102,7 @@ export class GoogleAds extends TargetAgent {
     if (action === GOOGLE_ADS_ACTION.TOGGLE) {
       return this.handleToggle(identifier, type, evaluation, params);
     } else if (action === GOOGLE_ADS_ACTION.MANAGE_CONV_VALUE_RULE) {
-      this.handleAddingConversionRule(identifier, evaluation, params);
+      this.handleManageConversionRule(identifier, type, evaluation, params);
     } else {
       throw new Error(
         `Action '${action}' not supported in '${GoogleAds.friendlyName}' agent`
@@ -152,8 +161,12 @@ export class GoogleAds extends TargetAgent {
     }
   }
 
-  handleAddingConversionRule(
+  /**
+   * Handles delegation of managing campaign CVRs.
+   */
+  private handleManageConversionRule(
     identifier: string,
+    selectoryType: GOOGLE_ADS_SELECTOR_TYPE,
     evaluation: boolean,
     params: Parameters
   ) {
@@ -165,9 +178,44 @@ export class GoogleAds extends TargetAgent {
       throw new Error('The geo target param value was not provided.');
     }
 
+    const campaings: Entity[] =
+      selectoryType === GOOGLE_ADS_SELECTOR_TYPE.CAMPAIGN_ID
+        ? this.getCampaingsById(
+            params.customerId,
+            (identifier as string).split(';').map(id => String(id))
+          )
+        : this.getCampaignsByLabel(params.customerId, identifier);
+    console.log(
+      `Retrieved following campaigns to manage CVRs for:  ${campaings.map(
+        campaign => campaign.resourceName
+      )}`
+    );
+
+    // TODO:  Replace with real impl when completed.
     console.log(
       `Will create/update CVR?:  ${evaluation}, conv. weight ${params.conversionWeight}`
     );
+    const campaignCvrDao = new EmptyCampaignDaoImpl(params.customerId);
+    if (!evaluation) {
+      campaignCvrDao.disableAllCvrsForCampaigns(
+        campaings.map(entity => entity.resourceName)
+      );
+    } else {
+      // The DAO will create a multiplication CVR, where conversion values are
+      // multiplied by the generated %.  NOTE:  Ads restricts multiplied
+      // percentages be clamped between an lower and upper bound of 50% to 1000%
+      const clampedAdjustment: number = Math.max(
+        CVR_ADJUSTMENT_LOWER_BOUND,
+        Math.min(params.conversionWeight, CVR_ADJUSTMENT_UPPER_BOUND)
+      );
+      const finalAdjustment: number = 1 + clampedAdjustment;
+
+      campaignCvrDao.persistCvrForCampaigns(
+        campaings.map(entity => entity.resourceName),
+        finalAdjustment,
+        params.geo
+      );
+    }
   }
 
   /**
@@ -345,16 +393,7 @@ export class GoogleAds extends TargetAgent {
     ids: string[],
     status: string
   ) {
-    const query = `
-      SELECT 
-        campaign.id,
-        campaign.status
-      FROM campaign
-      WHERE 
-        campaign.id IN (${ids.join(',')})
-    `;
-
-    const campaigns = this.getEntitiesByQuery(customerId, query, 'campaign');
+    const campaigns = this.getCampaingsById(customerId, ids);
 
     const path = `customers/${customerId}/campaigns:mutate`;
     for (const campaign of campaigns) {
@@ -466,11 +505,11 @@ export class GoogleAds extends TargetAgent {
    */
   private getAdGroupsById(customerId: string, ids: string[]): Entity[] {
     const query = `
-          SELECT 
+          SELECT
             ad_group.id,
             ad_group.status
           FROM ad_group
-          WHERE 
+          WHERE
             ad_group.id IN (${ids.join(',')})
         `;
 
@@ -489,6 +528,19 @@ export class GoogleAds extends TargetAgent {
         status: result.adGroup.status,
       };
     });
+  }
+
+  private getCampaingsById(customerId: string, ids: string[]): Entity[] {
+    const query = `
+      SELECT 
+        campaign.id,
+        campaign.status
+      FROM campaign
+      WHERE 
+        campaign.id IN (${ids.join(',')})
+    `;
+
+    return this.getEntitiesByQuery(customerId, query, 'campaign');
   }
 
   /**
@@ -665,44 +717,15 @@ export class GoogleAds extends TargetAgent {
    * @returns {Entity[]}
    */
   private getCampaignsByLabel(customerId: string, label: string): Entity[] {
-    const labelResource = this.getCampaignLabelResourceByName(
-      customerId,
-      label
-    );
-
-    const query = `
-      SELECT 
-        campaign.id,
-        campaign.status
-      FROM campaign 
-      WHERE 
-        campaign.labels CONTAINS ANY ('${labelResource}')
-    `;
-
-    return this.getEntitiesByQuery(customerId, query, 'campaign');
-  }
-
-  /**
-   * Retrieves the campaign label resource name for the provided label name.
-   *
-   * @param customerId
-   * @param labelName
-   */
-  private getCampaignLabelResourceByName(
-    customerId: string,
-    labelName: string
-  ): string {
     const query = `
       SELECT
-        label.resource_name,
-        label.status
-      FROM label
-      WHERE 
-        label.name = '${labelName}'
+        campaign.resource_name,
+        campaign.status
+      FROM campaign_label
+      WHERE
+        label.name = '${label}'
     `;
-
-    const campaignLabels = this.getEntitiesByQuery(customerId, query, 'label');
-    return campaignLabels[0].resourceName;
+    return this.getEntitiesByQuery(customerId, query, 'campaign');
   }
 
   /**
