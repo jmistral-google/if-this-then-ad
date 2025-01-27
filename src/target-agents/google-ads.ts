@@ -822,7 +822,7 @@ export class GoogleAds extends TargetAgent {
    *
    * @param {string} customerId - The customer ID.
    * @param {string} geoTargetResource - The GeoTargetConstant resource name.
-   * @returns {any[]} - An array of matching ConversionValueRules.
+   * @returns {Entity[]} - An array of matching ConversionValueRules.
    */
   private getConversionValueRuleForLocation(customerId: string, geoTargetResource: string): any[] {
     const query = `
@@ -905,18 +905,16 @@ export class GoogleAds extends TargetAgent {
   }
 
   /**
-   * Retrieves an existing ConversionValueRuleSet for the specified campaign and ConversionValueRule.
+   * Retrieves an existing ConversionValueRuleSet for the specified campaign.
    *
    * @param {string} customerId - The customer ID.
    * @param {string} campaignResourceName - The resource name of the campaign.
-   * @param {string} conversionValueRuleResourceName - The resource name of the ConversionValueRule.
    * @returns {Entity[]} - The matching ConversionValueRuleSet.
    */
-  private getConversionValueRuleSetForCampaignAndCvr(
+  private getConversionValueRuleSetForCampaign(
     customerId: string,
     campaignResourceName: string,
-    conversionValueRuleResourceName: string
-  ): string | null {
+  ): Entity[] {
     const query = `
       SELECT
         conversion_value_rule_set.resource_name,
@@ -926,7 +924,6 @@ export class GoogleAds extends TargetAgent {
         conversion_value_rule_set
       WHERE
         conversion_value_rule_set.campaign = '${campaignResourceName}'
-        AND conversion_value_rule_set.conversion_value_rules CONTAINS ANY ('${conversionValueRuleResourceName}')
     `;
 
     return this.getEntitiesByQuery(customerId, query, 'conversion_value_rule_set');
