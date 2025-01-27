@@ -752,4 +752,113 @@ export class GoogleAds extends TargetAgent {
     const geoTargets = this.getEntitiesByQuery(customerId, query, 'geo_target_constant');
     return geoTargets[0].resourceName;
   }
+
+
+  /**
+   * Creates a ConversionValueRule that applies to the specified location.
+   *
+   * @param {string} customerId - The customer ID.
+   * @param {string} geoTargetResource - The GeoTargetConstant resource name.
+   * @param {number} value - The adjustment factor (e.g., 1.2 for a 20% increase).
+   * @returns {string} - The resource name of the created ConversionValueRule.
+   */
+  private createConversionValueRule(customerId: string, geoTargetResource: string, value: number): string {
+    // Construct the ConversionValueRule operation payload.
+    const payload = {
+      operations: [
+        {
+          create: {
+            action: {
+              operation: 'MULTIPLY', // Define the action type (e.g., MULTIPLY or ADD).
+              value: value, // Use the provided adjustment factor.
+            },
+            geoLocationCondition: {
+              geoTargetConstants: [geoTargetResource],
+              geoMatchType: 'LOCATION_OF_PRESENCE', // Match based on location presence.
+            },
+          },
+        },
+      ],
+    };
+
+    const path = `customers/${customerId}/conversionValueRules:mutate`;
+    const res = this.fetchUrl(path, 'POST', payload);
+    const parsedResponse = JSON.parse(res.getContentText());
+    return parsedResponse.results[0]?.resourceName;
+  }
+
+  /**
+   * Updates an existing ConversionValueRule with a new value.
+   *
+   * @param {string} customerId - The customer ID.
+   * @param {string} resourceName - The resource name of the ConversionValueRule to update.
+   * @param {number} value - The new adjustment factor.
+   * @returns {string} - The resource name of the updated ConversionValueRule.
+   */
+  private updateConversionValueRule(customerId: string, resourceName: string, value: number): string {
+    const payload = {
+      operations: [
+        {
+          update: {
+            resourceName: resourceName,
+            action: {
+              operation: 'MULTIPLY',
+              value: value,
+            },
+          },
+          updateMask: 'action.value',
+        },
+      ],
+    };
+
+    const path = `customers/${customerId}/conversionValueRules:mutate`;
+    const res = this.fetchUrl(path, 'POST', payload);
+    const parsedResponse = JSON.parse(res.getContentText());
+    return parsedResponse.results[0]?.resourceName;
+  }
+
+  /**
+   * Retrieves an existing ConversionValueRule for the specified GeoTargetConstant.
+   *
+   * @param {string} customerId - The customer ID.
+   * @param {string} geoTargetResource - The GeoTargetConstant resource name.
+   * @returns {any[]} - An array of matching ConversionValueRules.
+   */
+  private getConversionValueRuleForLocation(customerId: string, geoTargetResource: string): any[] {
+    const query = `
+      SELECT
+        conversion_value_rule.resource_name,
+        conversion_value_rule.geo_location_condition.geo_target_constants
+      FROM
+        conversion_value_rule
+      WHERE
+        conversion_value_rule.geo_location_condition.geo_target_constants CONTAINS ANY ('${geoTargetResource}')
+    `;
+
+    return this.getEntitiesByQuery(customerId, query, 'conversion_value_rule');
+  }
+
+  /**
+   * Creates or updates a ConversionValueRule for the specified location.
+   *
+   * @param {string} customerId - The customer ID.
+   * @param {string} geoTargetName - The name of the geo target (e.g., a city).
+   * @param {number} value - The adjustment factor (e.g., 1.2 for a 20% increase).
+   * @returns {string} - The resource name of the created or updated ConversionValueRule.
+   */
+  private mutateConversionValueRule(customerId: string, geoTargetName: string, value: number): string {
+    // Retrieve the GeoTargetConstant resource name for the provided geo target name.
+    const geoTargetResource = this.getGeoTargetByName(customerId, geoTargetName);
+
+    // Check if a ConversionValueRule exists for the location.
+    const existingRules = this.getConversionValueRuleForLocation(customerId, geoTargetResource);
+
+    if (existingRules.length > 0) {
+      // Update the existing rule.
+      return this.updateConversionValueRule(customerId, existingRules[0].resourceName, value);
+    } else {
+      // Create a new rule.
+      return this.createConversionValueRule(customerId, geoTargetResource, value);
+    }
+  }
 }
