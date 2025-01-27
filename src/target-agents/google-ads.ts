@@ -861,4 +861,74 @@ export class GoogleAds extends TargetAgent {
       return this.createConversionValueRule(customerId, geoTargetResource, value);
     }
   }
+
+  /**
+   * Creates a ConversionValueRuleSet attached to a specific campaign.
+   *
+   * @param {string} customerId - The customer ID.
+   * @param {string} campaignResourceName - The resource name of the campaign to attach the rule set to.
+   * @param {string[]} conversionValueRuleResourceNames - The resource names of the ConversionValueRules to include in the set.
+   * @returns {string} - The resource name of the created ConversionValueRuleSet.
+   */
+  private createConversionValueRuleSet(
+    customerId: string,
+    campaignResourceName: string,
+    conversionValueRuleResourceNames: string[]
+  ): string {
+    // Construct the ConversionValueRuleSet operation payload.
+    const payload = {
+      operations: [
+        {
+          create: {
+            // Attach the rule set to the specified campaign.
+            campaign: campaignResourceName,
+            attachmentType: 'CAMPAIGN', // Set attachment type to CAMPAIGN.
+            // Add the ConversionValueRules to the set.
+            conversionValueRules: conversionValueRuleResourceNames,
+            // Add dimensions (e.g., GEO_LOCATION).
+            dimensions: ['GEO_LOCATION'],
+          },
+        },
+      ],
+    };
+
+    const path = `customers/${customerId}/conversionValueRuleSets:mutate`;
+    const res = this.fetchUrl(path, 'POST', payload);
+    const parsedResponse = JSON.parse(res.getContentText());
+
+    if (parsedResponse.results && parsedResponse.results.length > 0) {
+      console.log(`Created conversion value rule set: ${parsedResponse.results[0].resourceName}`);
+      return parsedResponse.results[0].resourceName;
+    } else {
+      throw new Error('Failed to create ConversionValueRuleSet.');
+    }
+  }
+
+  /**
+   * Retrieves an existing ConversionValueRuleSet for the specified campaign and ConversionValueRule.
+   *
+   * @param {string} customerId - The customer ID.
+   * @param {string} campaignResourceName - The resource name of the campaign.
+   * @param {string} conversionValueRuleResourceName - The resource name of the ConversionValueRule.
+   * @returns {Entity[]} - The matching ConversionValueRuleSet.
+   */
+  private getConversionValueRuleSetForCampaignAndCvr(
+    customerId: string,
+    campaignResourceName: string,
+    conversionValueRuleResourceName: string
+  ): string | null {
+    const query = `
+      SELECT
+        conversion_value_rule_set.resource_name,
+        conversion_value_rule_set.campaign,
+        conversion_value_rule_set.conversion_value_rules
+      FROM
+        conversion_value_rule_set
+      WHERE
+        conversion_value_rule_set.campaign = '${campaignResourceName}'
+        AND conversion_value_rule_set.conversion_value_rules CONTAINS ANY ('${conversionValueRuleResourceName}')
+    `;
+
+    return this.getEntitiesByQuery(customerId, query, 'conversion_value_rule_set');
+  }
 }
