@@ -16,7 +16,7 @@
 
 import { Auth, ServiceAccount } from '../helpers/auth';
 import { TargetAgent } from './base';
-import { CampaignDao, EmptyCampaignDaoImpl } from '../dao/campaign_cvr';
+import { CampaignDao, GoogleAdsApiCampaignDaoImpl } from '../dao/campaign_cvr';
 
 // Lower bound of the CVR adjustment.  Ie, a CVR can not lower a conversion
 // beyond 50% less than it's original value.
@@ -192,10 +192,14 @@ export class GoogleAds extends TargetAgent {
     );
 
     // TODO:  Replace with real impl when completed.
-    console.log(
-      `Will create/update CVR?:  ${evaluation}, conv. weight ${params.conversionWeight}`
+    // const campaignCvrDao = new EmptyCampaignDaoImpl(params.customerId);
+    const campaignCvrDao: CampaignDao = new GoogleAdsApiCampaignDaoImpl(
+      params.customerId,
+      params.developerToken,
+      params.serviceAccount,
+      params.loginCustomerId
     );
-    const campaignCvrDao = new EmptyCampaignDaoImpl(params.customerId);
+
     if (!evaluation) {
       campaignCvrDao.disableAllCvrsForCampaigns(
         campaings.map(entity => entity.resourceName)
@@ -210,6 +214,9 @@ export class GoogleAds extends TargetAgent {
       );
       const finalAdjustment: number = 1 + clampedAdjustment;
 
+      console.log(
+        `Persisting CVR:  geo ${params.geo}, conv. weight ${finalAdjustment}`
+      );
       campaignCvrDao.persistCvrForCampaigns(
         campaings.map(entity => entity.resourceName),
         finalAdjustment,
@@ -726,206 +733,5 @@ export class GoogleAds extends TargetAgent {
         label.name = '${label}'
     `;
     return this.getEntitiesByQuery(customerId, query, 'campaign');
-  }
-
-  /**
-   * Retrieves the GeoTargetConstant resource name for a specific location.
-   *
-   * @param {string} customerId
-   * @param {string} locationName
-   * @returns {string}
-   */
-  private getGeoTargetByName(customerId: string, locationName: string): string {
-    const query = `
-      SELECT
-        geo_target_constant.resource_name,
-        geo_target_constant.name,
-        geo_target_constant.country_code,
-        geo_target_constant.target_type
-      FROM
-        geo_target_constant
-      WHERE
-        geo_target_constant.target_type = 'City'
-        AND geo_target_constant.name = '${locationName}'
-    `;
-
-    const geoTargets = this.getEntitiesByQuery(customerId, query, 'geo_target_constant');
-    return geoTargets[0].resourceName;
-  }
-
-
-  /**
-   * Creates a ConversionValueRule that applies to the specified location.
-   *
-   * @param {string} customerId - The customer ID.
-   * @param {string} geoTargetResource - The GeoTargetConstant resource name.
-   * @param {number} value - The adjustment factor (e.g., 1.2 for a 20% increase).
-   * @returns {string} - The resource name of the created ConversionValueRule.
-   */
-  private createConversionValueRule(customerId: string, geoTargetResource: string, value: number): string {
-    // Construct the ConversionValueRule operation payload.
-    const payload = {
-      operations: [
-        {
-          create: {
-            action: {
-              operation: 'MULTIPLY', // Define the action type (e.g., MULTIPLY or ADD).
-              value: value, // Use the provided adjustment factor.
-            },
-            geoLocationCondition: {
-              geoTargetConstants: [geoTargetResource],
-              geoMatchType: 'LOCATION_OF_PRESENCE', // Match based on location presence.
-            },
-          },
-        },
-      ],
-    };
-
-    const path = `customers/${customerId}/conversionValueRules:mutate`;
-    const res = this.fetchUrl(path, 'POST', payload);
-    const parsedResponse = JSON.parse(res.getContentText());
-    return parsedResponse.results[0]?.resourceName;
-  }
-
-  /**
-   * Updates an existing ConversionValueRule with a new value.
-   *
-   * @param {string} customerId - The customer ID.
-   * @param {string} resourceName - The resource name of the ConversionValueRule to update.
-   * @param {number} value - The new adjustment factor.
-   * @returns {string} - The resource name of the updated ConversionValueRule.
-   */
-  private updateConversionValueRule(customerId: string, resourceName: string, value: number): string {
-    const payload = {
-      operations: [
-        {
-          update: {
-            resourceName: resourceName,
-            action: {
-              operation: 'MULTIPLY',
-              value: value,
-            },
-          },
-          updateMask: 'action.value',
-        },
-      ],
-    };
-
-    const path = `customers/${customerId}/conversionValueRules:mutate`;
-    const res = this.fetchUrl(path, 'POST', payload);
-    const parsedResponse = JSON.parse(res.getContentText());
-    return parsedResponse.results[0]?.resourceName;
-  }
-
-  /**
-   * Retrieves an existing ConversionValueRule for the specified GeoTargetConstant.
-   *
-   * @param {string} customerId - The customer ID.
-   * @param {string} geoTargetResource - The GeoTargetConstant resource name.
-   * @returns {Entity[]} - An array of matching ConversionValueRules.
-   */
-  private getConversionValueRuleForLocation(customerId: string, geoTargetResource: string): any[] {
-    const query = `
-      SELECT
-        conversion_value_rule.resource_name,
-        conversion_value_rule.geo_location_condition.geo_target_constants
-      FROM
-        conversion_value_rule
-      WHERE
-        conversion_value_rule.geo_location_condition.geo_target_constants CONTAINS ANY ('${geoTargetResource}')
-    `;
-
-    return this.getEntitiesByQuery(customerId, query, 'conversion_value_rule');
-  }
-
-  /**
-   * Creates or updates a ConversionValueRule for the specified location.
-   *
-   * @param {string} customerId - The customer ID.
-   * @param {string} geoTargetName - The name of the geo target (e.g., a city).
-   * @param {number} value - The adjustment factor (e.g., 1.2 for a 20% increase).
-   * @returns {string} - The resource name of the created or updated ConversionValueRule.
-   */
-  private mutateConversionValueRule(customerId: string, geoTargetName: string, value: number): string {
-    // Retrieve the GeoTargetConstant resource name for the provided geo target name.
-    const geoTargetResource = this.getGeoTargetByName(customerId, geoTargetName);
-
-    // Check if a ConversionValueRule exists for the location.
-    const existingRules = this.getConversionValueRuleForLocation(customerId, geoTargetResource);
-
-    if (existingRules.length > 0) {
-      // Update the existing rule.
-      return this.updateConversionValueRule(customerId, existingRules[0].resourceName, value);
-    } else {
-      // Create a new rule.
-      return this.createConversionValueRule(customerId, geoTargetResource, value);
-    }
-  }
-
-  /**
-   * Creates a ConversionValueRuleSet attached to a specific campaign.
-   *
-   * @param {string} customerId - The customer ID.
-   * @param {string} campaignResourceName - The resource name of the campaign to attach the rule set to.
-   * @param {string[]} conversionValueRuleResourceNames - The resource names of the ConversionValueRules to include in the set.
-   * @returns {string} - The resource name of the created ConversionValueRuleSet.
-   */
-  private createConversionValueRuleSet(
-    customerId: string,
-    campaignResourceName: string,
-    conversionValueRuleResourceNames: string[]
-  ): string {
-    // Construct the ConversionValueRuleSet operation payload.
-    const payload = {
-      operations: [
-        {
-          create: {
-            // Attach the rule set to the specified campaign.
-            campaign: campaignResourceName,
-            attachmentType: 'CAMPAIGN', // Set attachment type to CAMPAIGN.
-            // Add the ConversionValueRules to the set.
-            conversionValueRules: conversionValueRuleResourceNames,
-            // Add dimensions (e.g., GEO_LOCATION).
-            dimensions: ['GEO_LOCATION'],
-          },
-        },
-      ],
-    };
-
-    const path = `customers/${customerId}/conversionValueRuleSets:mutate`;
-    const res = this.fetchUrl(path, 'POST', payload);
-    const parsedResponse = JSON.parse(res.getContentText());
-
-    if (parsedResponse.results && parsedResponse.results.length > 0) {
-      console.log(`Created conversion value rule set: ${parsedResponse.results[0].resourceName}`);
-      return parsedResponse.results[0].resourceName;
-    } else {
-      throw new Error('Failed to create ConversionValueRuleSet.');
-    }
-  }
-
-  /**
-   * Retrieves an existing ConversionValueRuleSet for the specified campaign.
-   *
-   * @param {string} customerId - The customer ID.
-   * @param {string} campaignResourceName - The resource name of the campaign.
-   * @returns {Entity[]} - The matching ConversionValueRuleSet.
-   */
-  private getConversionValueRuleSetForCampaign(
-    customerId: string,
-    campaignResourceName: string,
-  ): Entity[] {
-    const query = `
-      SELECT
-        conversion_value_rule_set.resource_name,
-        conversion_value_rule_set.campaign,
-        conversion_value_rule_set.conversion_value_rules
-      FROM
-        conversion_value_rule_set
-      WHERE
-        conversion_value_rule_set.campaign = '${campaignResourceName}'
-    `;
-
-    return this.getEntitiesByQuery(customerId, query, 'conversion_value_rule_set');
   }
 }
