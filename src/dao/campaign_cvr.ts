@@ -113,7 +113,38 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
       conversionWeight
     );
 
-    // TODO:  Associate persisted CVR with provided campaigns.
+    // Associate persisted CVR with provided campaigns.
+    campaignResourceNames.forEach(campaignResourceName => {
+      const existingRuleSet = this.getConversionValueRuleSetForCampaign(
+        this.customerId,
+        campaignResourceName
+      );
+      if (existingRuleSet) {
+        const existingRules =
+          existingRuleSet[0].conversionValueRuleSet.conversionValueRules;
+        if (existingRules.includes(persistedCvr)) {
+          console.log(
+            'CVR already exists in the set. CVR Set update not required.'
+          );
+        } else {
+          this.updateConversionValueRuleSet(
+            this.customerId,
+            existingRuleSet.resourceName,
+            [...existingRules, persistedCvr]
+          );
+          console.log(
+            `CVR Set already exists for campaign: ${campaignResourceName}. Updating CVR set.`
+          );
+        }
+      } else {
+        console.log(`Creating CVR Set for campaign: ${campaignResourceName}.`);
+        this.createConversionValueRuleSet(
+          this.customerId,
+          campaignResourceName,
+          [persistedCvr]
+        );
+      }
+    });
   }
 
   private persistCvr(
@@ -285,5 +316,113 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
     } else {
       return '';
     }
+  }
+
+  /**
+   * Creates a ConversionValueRuleSet attached to a specific campaign.
+   *
+   * @param {string} customerId - The customer ID.
+   * @param {string} campaignResourceName - The resource name of the campaign to attach the rule set to.
+   * @param {string[]} conversionValueRuleResourceNames - The resource names of the ConversionValueRules to include in the set.
+   * @returns {string} - The resource name of the created ConversionValueRuleSet.
+   */
+  private createConversionValueRuleSet(
+    customerId: string,
+    campaignResourceName: string,
+    conversionValueRuleResourceNames: string[]
+  ): string {
+    // Construct the ConversionValueRuleSet operation payload.
+    const payload = {
+      operations: [
+        {
+          create: {
+            // Attach the rule set to the specified campaign.
+            campaign: campaignResourceName,
+            attachmentType: 'CAMPAIGN', // Set attachment type to CAMPAIGN.
+            // Add the ConversionValueRules to the set.
+            conversionValueRules: conversionValueRuleResourceNames,
+            // Add dimensions (e.g., GEO_LOCATION).
+            dimensions: ['GEO_LOCATION'],
+          },
+        },
+      ],
+    };
+    const path = `customers/${customerId}/conversionValueRuleSets:mutate`;
+    const res = this.apiClient.makeApiCall(path, 'POST', payload, true);
+    const parsedResponse = JSON.parse(res.getContentText());
+    if (parsedResponse.results && parsedResponse.results.length > 0) {
+      console.log(
+        `Created conversion value rule set: ${parsedResponse.results[0].resourceName}`
+      );
+      return parsedResponse.results[0].resourceName;
+    } else {
+      throw new Error('Failed to create ConversionValueRuleSet.');
+    }
+  }
+
+  /**
+   * Updates an existing ConversionValueRuleSet with new ConversionValueRules.
+   *
+   * @param {string} customerId - The customer ID.
+   * @param {string} ruleSetResourceName - The resource name of the ConversionValueRuleSet to update.
+   * @param {string} newConversionValueRuleResourceNames - An array of resource names of new ConversionValueRules to add or replace existing ones.
+   * @returns {string} - The resource name of the updated ConversionValueRuleSet.
+   */
+  private updateConversionValueRuleSet(
+    customerId: string,
+    ruleSetResourceName: string,
+    newConversionValueRuleResourceNames: string[]
+  ): string {
+    // Construct the ConversionValueRuleSet operation payload.
+    const payload = {
+      operations: [
+        {
+          update: {
+            resourceName: ruleSetResourceName,
+            conversionValueRules: newConversionValueRuleResourceNames, // Use the provided array
+          },
+          updateMask: 'conversion_value_rules',
+        },
+      ],
+    };
+
+    const path = `customers/${customerId}/conversionValueRuleSets:mutate`;
+    const res = this.apiClient.makeApiCall(path, 'POST', payload);
+    const updatedCvrSetResourceName = res.results?.resourceName;
+
+    console.log(`Updated CVR set: ${updatedCvrSetResourceName}`);
+    return updatedCvrSetResourceName;
+  }
+
+  /**
+   * Retrieves an existing ConversionValueRuleSet for the specified campaign.
+   *
+   * @param {string} customerId - The customer ID.
+   * @param {string} campaignResourceName - The resource name of the campaign.
+   * @returns {any} - The matching ConversionValueRuleSet object.
+   */
+  private getConversionValueRuleSetForCampaign(
+    customerId: string,
+    campaignResourceName: string
+  ): any {
+    const query = `
+      SELECT
+        conversion_value_rule_set.resource_name,
+        conversion_value_rule_set.campaign,
+        conversion_value_rule_set.conversion_value_rules
+      FROM
+        conversion_value_rule_set
+      WHERE
+        conversion_value_rule_set.campaign = '${campaignResourceName}'
+    `;
+    const payload = {
+      query,
+    };
+
+    const path = `customers/${customerId}/googleAds:search`;
+    const res = this.apiClient.makeApiCall(path, 'POST', payload, true);
+
+    // Return the first result (assuming only one rule set exists per campaign).
+    return res.results;
   }
 }
