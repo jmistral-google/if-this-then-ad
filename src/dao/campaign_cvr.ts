@@ -115,14 +115,11 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
 
     // Associate persisted CVR with provided campaigns.
     campaignResourceNames.forEach(campaignResourceName => {
-      // Check if a ConversionValueRuleSet already exists for the campaign.
       const existingRuleSet = this.getConversionValueRuleSetForCampaign(
         this.customerId,
         campaignResourceName
       );
-
-      if (existingRuleSet.length > 0) {
-        // If a rule set exists, update it with the new conversion value rule.
+      if (existingRuleSet) {
         const existingRules =
           existingRuleSet[0].conversionValueRuleSet.conversionValueRules;
         if (existingRules.includes(persistedCvr)) {
@@ -140,13 +137,12 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
           );
         }
       } else {
-        // If no rule set exists, create a new one.
+        console.log(`Creating CVR Set for campaign: ${campaignResourceName}.`);
         this.createConversionValueRuleSet(
           this.customerId,
           campaignResourceName,
           [persistedCvr]
         );
-        console.log(`Creating CVR Set for campaign: ${campaignResourceName}.`);
       }
     });
   }
