@@ -124,15 +124,21 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
       if (existingRuleSet.length > 0) {
         // If a rule set exists, update it with the new conversion value rule.
         const existingRules =
-          existingRuleSet.conversionValueRuleSet.conversionValueRules;
-        this.updateConversionValueRuleSet(
-          this.customerId,
-          existingRuleSet.resourceName,
-          [...existingRules, persistedCvr]
-        );
-        console.log(
-          `CVR Set already exists for campaign: ${campaignResourceName}. Updating CVR set.`
-        );
+          existingRuleSet[0].conversionValueRuleSet.conversionValueRules;
+        if (existingRules.includes(persistedCvr)) {
+          console.log(
+            'CVR already exists in the set. CVR Set update not required.'
+          );
+        } else {
+          this.updateConversionValueRuleSet(
+            this.customerId,
+            existingRuleSet.resourceName,
+            [...existingRules, persistedCvr]
+          );
+          console.log(
+            `CVR Set already exists for campaign: ${campaignResourceName}. Updating CVR set.`
+          );
+        }
       } else {
         // If no rule set exists, create a new one.
         this.createConversionValueRuleSet(
