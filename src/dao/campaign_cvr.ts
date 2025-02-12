@@ -120,17 +120,6 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
           campaignResourceName
         );
         if (existingRuleSet && existingRuleSet.length > 0) {
-<<<<<<< HEAD
-          const existingRules =
-            existingRuleSet[0].conversionValueRuleSet.conversionValueRules;
-          let cvrForGeoExists = false;
-          let cvrForGeoResourceName = '';
-          for (const cvrResourceName of existingRules) {
-            const cvrGeoTarget = this.getGeoTargetForConversionValueRule(
-              this.customerId,
-              cvrResourceName
-            );
-=======
           const conversionValueRuleSet =
             existingRuleSet[0].conversionValueRuleSet;
           const existingRules = conversionValueRuleSet.conversionValueRules;
@@ -145,7 +134,6 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
             const cvrGeoTarget =
               currentCVR.geoLocationCondition.geoTargetConstants[0];
             ruleValue = currentCVR.action.value;
->>>>>>> 7798efe (If the cvr value is the same as the conversion weight, skip the updated.)
             if (cvrGeoTarget === geoTargetResource) {
               cvrForGeoExists = true;
               cvrForGeoResourceName = cvrResourceName;
@@ -153,13 +141,6 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
             }
           }
           if (cvrForGeoExists) {
-<<<<<<< HEAD
-            this.updateConversionValueRule(
-              this.customerId,
-              cvrForGeoResourceName,
-              conversionWeight
-            );
-=======
             if (ruleValue !== conversionWeight) {
               this.updateConversionValueRule(
                 this.customerId,
@@ -171,7 +152,6 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
                 'ConversionValueRule Value is the same. Update not required.'
               );
             }
->>>>>>> 7798efe (If the cvr value is the same as the conversion weight, skip the updated.)
           } else {
             const newCvr = this.createConversionValueRule(
               this.customerId,
@@ -180,11 +160,7 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
             );
             this.updateConversionValueRuleSet(
               this.customerId,
-<<<<<<< HEAD
-              existingRuleSet.resourceName,
-=======
               conversionValueRuleSet.resourceName,
->>>>>>> 7798efe (If the cvr value is the same as the conversion weight, skip the updated.)
               [...existingRules, newCvr]
             );
           }
@@ -234,8 +210,8 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
       FROM
         geo_target_constant
       WHERE
-        geo_target_constant.target_type = 'City'
-        AND geo_target_constant.name = '${locationName}'
+        geo_target_constant.target_type = 'DMA Region'
+        AND geo_target_constant.name LIKE '${locationName}%'
     `;
 
     const payload = {
@@ -496,11 +472,6 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
     if (!(res.results && res.results.length)) {
       throw new Error(`ConversionValueRule ${cvrResourceName} not found`);
     }
-<<<<<<< HEAD
-    return res.results[0].conversionValueRule.geoLocationCondition
-      .geoTargetConstants[0];
-=======
     return res.results[0].conversionValueRule;
->>>>>>> 7798efe (If the cvr value is the same as the conversion weight, skip the updated.)
   }
 }
