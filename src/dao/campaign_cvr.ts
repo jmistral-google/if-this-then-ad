@@ -120,6 +120,7 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
           campaignResourceName
         );
         if (existingRuleSet && existingRuleSet.length > 0) {
+<<<<<<< HEAD
           const existingRules =
             existingRuleSet[0].conversionValueRuleSet.conversionValueRules;
           let cvrForGeoExists = false;
@@ -129,6 +130,22 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
               this.customerId,
               cvrResourceName
             );
+=======
+          const conversionValueRuleSet =
+            existingRuleSet[0].conversionValueRuleSet;
+          const existingRules = conversionValueRuleSet.conversionValueRules;
+          let cvrForGeoExists = false;
+          let cvrForGeoResourceName = '';
+          let ruleValue = 0;
+          for (const cvrResourceName of existingRules) {
+            const currentCVR = this.getConversionValueRule(
+              this.customerId,
+              cvrResourceName
+            );
+            const cvrGeoTarget =
+              currentCVR.geoLocationCondition.geoTargetConstants[0];
+            ruleValue = currentCVR.action.value;
+>>>>>>> 7798efe (If the cvr value is the same as the conversion weight, skip the updated.)
             if (cvrGeoTarget === geoTargetResource) {
               cvrForGeoExists = true;
               cvrForGeoResourceName = cvrResourceName;
@@ -136,11 +153,25 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
             }
           }
           if (cvrForGeoExists) {
+<<<<<<< HEAD
             this.updateConversionValueRule(
               this.customerId,
               cvrForGeoResourceName,
               conversionWeight
             );
+=======
+            if (ruleValue !== conversionWeight) {
+              this.updateConversionValueRule(
+                this.customerId,
+                cvrForGeoResourceName,
+                conversionWeight
+              );
+            } else {
+              console.log(
+                'ConversionValueRule Value is the same. Update not required.'
+              );
+            }
+>>>>>>> 7798efe (If the cvr value is the same as the conversion weight, skip the updated.)
           } else {
             const newCvr = this.createConversionValueRule(
               this.customerId,
@@ -149,7 +180,11 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
             );
             this.updateConversionValueRuleSet(
               this.customerId,
+<<<<<<< HEAD
               existingRuleSet.resourceName,
+=======
+              conversionValueRuleSet.resourceName,
+>>>>>>> 7798efe (If the cvr value is the same as the conversion weight, skip the updated.)
               [...existingRules, newCvr]
             );
           }
@@ -392,8 +427,7 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
 
     const path = `customers/${customerId}/conversionValueRuleSets:mutate`;
     const res = this.apiClient.makeApiCall(path, 'POST', payload);
-    const updatedCvrSetResourceName = res.results?.resourceName;
-
+    const updatedCvrSetResourceName = res.results?.[0].resourceName;
     console.log(`Updated CVR set: ${updatedCvrSetResourceName}`);
     return updatedCvrSetResourceName;
   }
@@ -437,13 +471,14 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
    * @param {string} cvrResourceName - The resource name of the ConversionValueRule.
    * @returns {string} - The GeoTargetConstant resource name.
    */
-  private getGeoTargetForConversionValueRule(
+  private getConversionValueRule(
     customerId: string,
     cvrResourceName: string
-  ): string {
+  ): any {
     const query = `
       SELECT
-        conversion_value_rule.geo_location_condition.geo_target_constants
+        conversion_value_rule.geo_location_condition.geo_target_constants,
+        conversion_value_rule.action.value
       FROM
         conversion_value_rule
       WHERE
@@ -461,7 +496,11 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
     if (!(res.results && res.results.length)) {
       throw new Error(`ConversionValueRule ${cvrResourceName} not found`);
     }
+<<<<<<< HEAD
     return res.results[0].conversionValueRule.geoLocationCondition
       .geoTargetConstants[0];
+=======
+    return res.results[0].conversionValueRule;
+>>>>>>> 7798efe (If the cvr value is the same as the conversion weight, skip the updated.)
   }
 }
