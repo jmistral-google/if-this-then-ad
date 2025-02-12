@@ -102,7 +102,12 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
     console.log(
       `Adding/Updating CVRs:  geo = ${geoTargetName}, weight = ${conversionWeight}, campaigns = ${campaignResourceNames}`
     );
-
+    // 1. Get the geo target resource
+    // 2. Iterate over the list of campaign resource names
+    // 3. Get the Conversion Value Rule Sets for the given resource name
+    // 4. Get the Conversion Value Rule given the resource name and the geo target resource name. If it exists, update the value.
+    //  If it doens't exist, then create it and then associate it with conversion value rule set.
+    // 5. If the conversion value rule set doesn't exist, then create the conversion value rule and then create the rule set.
     const geoTargetResource = this.getGeoTargetByName(
       this.customerId,
       geoTargetName
@@ -118,30 +123,57 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
       const existingRuleSet = this.getConversionValueRuleSetForCampaign(
         this.customerId,
         campaignResourceName
-      );
+      )[0];
       if (existingRuleSet) {
         const existingRules =
-          existingRuleSet[0].conversionValueRuleSet.conversionValueRules;
-        if (existingRules.includes(persistedCvr)) {
-          console.log(
-            'CVR already exists in the set. CVR Set update not required.'
+          existingRuleSet.conversionValueRuleSet.conversionValueRules;
+        // 2. Check if a CVR for the geo target exists in the set.
+        let cvrForGeoExists = false;
+        let cvrForGeoResourceName = '';
+
+        for (const cvrResourceName of existingRules) {
+          const cvrGeoTarget = this.getGeoTargetForConversionValueRule(
+            this.customerId,
+            cvrResourceName
+          );
+          if (cvrGeoTarget === geoTargetResource) {
+            cvrForGeoExists = true;
+            cvrForGeoResourceName = cvrResourceName;
+            break;
+          }
+        }
+
+        if (cvrForGeoExists) {
+          // 3a. If a CVR for the geo exists, update it.
+          this.updateConversionValueRule(
+            this.customerId,
+            cvrForGeoResourceName,
+            conversionWeight
           );
         } else {
+          // 3b. If no CVR for the geo exists, create a new one and add it to the set.
+          const newCvr = this.createConversionValueRule(
+            this.customerId,
+            geoTargetResource,
+            conversionWeight
+          );
           this.updateConversionValueRuleSet(
             this.customerId,
             existingRuleSet.resourceName,
-            [...existingRules, persistedCvr]
-          );
-          console.log(
-            `CVR Set already exists for campaign: ${campaignResourceName}. Updating CVR set.`
+            [...existingRules, newCvr]
           );
         }
       } else {
+        const newCvr = this.createConversionValueRule(
+          this.customerId,
+          geoTargetResource,
+          conversionWeight
+        );
         console.log(`Creating CVR Set for campaign: ${campaignResourceName}.`);
         this.createConversionValueRuleSet(
           this.customerId,
           campaignResourceName,
-          [persistedCvr]
+          [newCvr]
         );
       }
     });
@@ -424,5 +456,37 @@ export class GoogleAdsApiCampaignDaoImpl implements CampaignDao {
 
     // Return the first result (assuming only one rule set exists per campaign).
     return res.results;
+  }
+
+  /**
+   * Retrieves the GeoTargetConstant resource name associated with a ConversionValueRule.
+   *
+   * @param {string} customerId - The customer ID.
+   * @param {string} cvrResourceName - The resource name of the ConversionValueRule.
+   * @returns {string} - The GeoTargetConstant resource name.
+   */
+  private getGeoTargetForConversionValueRule(
+    customerId: string,
+    cvrResourceName: string
+  ): string {
+    const query = `
+      SELECT
+        conversion_value_rule.geo_location_condition.geo_target_constants
+      FROM
+        conversion_value_rule
+      WHERE
+        conversion_value_rule.resource_name = '${cvrResourceName}'
+    `;
+
+    const payload = {
+      query,
+    };
+
+    const path = `customers/${customerId}/googleAds:search`;
+    const res = this.apiClient.makeApiCall(path, 'POST', payload, true);
+
+    // Assuming the CVR has only one geo target constant
+    return res.results.conversionValueRule.geoLocationCondition
+      .geoTargetConstants;
   }
 }
